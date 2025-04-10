@@ -1,0 +1,521 @@
+       IDENTIFICATION DIVISION.                                         
+       PROGRAM-ID. A11PGM1.                                             
+      *UPDATE SCREEN PROGRAM                                            
+       DATA DIVISION.                                                   
+       WORKING-STORAGE SECTION.                                         
+           COPY A11MPS2.                                                
+           COPY DFHBMSCA.                                               
+           COPY DFHAID.                                                 
+           EXEC SQL                                                     
+              INCLUDE DEPTDCL                                           
+           END-EXEC.                                                    
+           EXEC SQL                                                     
+              INCLUDE EMPDCL                                            
+           END-EXEC.                                                    
+           EXEC SQL                                                     
+              INCLUDE EXTDCL                                            
+           END-EXEC.                                                    
+           EXEC SQL                                                     
+              INCLUDE LDRDCL                                            
+           END-EXEC.                                                    
+           EXEC SQL                                                     
+              INCLUDE DESDCL                                            
+           END-EXEC. 
+            EXEC SQL                                                     
+               INCLUDE PRODCL                                            
+            END-EXEC.                                                    
+            EXEC SQL                                                     
+               INCLUDE SQLCA                                             
+            END-EXEC.                                                    
+        01 WS-COMM               PIC X(06).                              
+        77 WS-ABSTIME            PIC S9(15) COMP-3.                      
+        77 WS-DATE               PIC X(10) VALUE SPACES.                 
+        77 WS-TIME               PIC X(08) VALUE SPACES.                 
+        77 WS-RESP               PIC S9(08) COMP.                        
+        77 WS-LENGTH             PIC S9(04) COMP.                        
+        77 WS-MSG                PIC X(74).                              
+        77 WS-FLAG               PIC X(01) VALUE SPACES.                 
+        77 WS-TEMP               PIC X(09).                              
+        77 WS-TEMP-COM           PIC X(05).                              
+        77 WS-INVALID-COUNT      PIC 9(03).                              
+        77 WS-MAIL-ID            PIC 9(03).                              
+        77 WS-MAIL-CHAR          PIC 9(03).                              
+        77 WS-SQLCODE            PIC S9(04) SIGN LEADING SEPARATE.       
+        77 IV-PROJ               PIC S9(04) COMP.                        
+        77 IV-PLID               PIC S9(04) COMP.                        
+        PROCEDURE DIVISION.                                              
+        000-MAIN-PROCESS.                                                
+            EVALUATE EIBCALEN                                            
+             WHEN 0           
+              MOVE LOW-VALUES TO EDITMAPO                                
+              INITIALIZE HV-EMP-REC                                      
+              MOVE DFHBMPRO TO ENAMEUA                                   
+              MOVE DFHBMPRO TO DESGUA                                    
+              MOVE DFHBMPRO TO EXTENUA                                   
+              MOVE DFHBMPRO TO MAILUA                                    
+              MOVE DFHBMPRO TO PROJUA                                    
+              MOVE DFHBMPRO TO PLIDUA                                    
+              MOVE DFHBMPRO TO DEPTCUA                                   
+              MOVE DFHBMPRO TO SLRUA                                     
+              MOVE DFHBMPRO TO OPTIONA                                   
+              PERFORM 100-SEND-UPDATE-MAP                                
+              MOVE 6 TO WS-LENGTH                                        
+              PERFORM 110-RETURN-UPDATE-PROG                             
+             WHEN 6                                                      
+              PERFORM 200-RECEIVE-UPDATE-MAP                             
+            END-EVALUATE.                                                
+            PERFORM 500-RETURN-UPDATE-MAP.                               
+        100-SEND-UPDATE-MAP.                                             
+            EXEC CICS ASKTIME                                            
+                 ABSTIME(WS-ABSTIME)                                     
+            END-EXEC.                                                    
+            EXEC CICS FORMATTIME                                         
+                 ABSTIME(WS-ABSTIME)                                     
+                 DDMMYYYY(WS-DATE)       
+                DATESEP('-')                                            
+                TIME(WS-TIME)                                           
+                TIMESEP(':')                                            
+           END-EXEC.                                                    
+           MOVE WS-DATE TO DATEUO.                                      
+           MOVE WS-TIME TO TIMEUO.                                      
+           MOVE DFHBMPRF TO MSGUA.                                      
+           EXEC CICS SEND                                               
+                MAP('EDITMAP')                                          
+                MAPSET('A11MPS2')                                       
+                ERASE                                                   
+           END-EXEC.                                                    
+       110-RETURN-UPDATE-PROG.                                          
+           EXEC CICS RETURN                                             
+                TRANSID('A111')                                         
+                COMMAREA(WS-COMM)                                       
+                LENGTH(WS-LENGTH)                                       
+           END-EXEC.                                                    
+       500-RETURN-UPDATE-MAP.                                           
+           EXEC CICS                                                    
+               RETURN                                                   
+           END-EXEC.                                                    
+       200-RECEIVE-UPDATE-MAP.                                          
+           EXEC CICS RECEIVE                                            
+                MAP('EDITMAP')       
+                 MAPSET('A11MPS2')                                       
+                 RESP(WS-RESP)                                           
+            END-EXEC.                                                    
+            EVALUATE WS-RESP                                             
+             WHEN DFHRESP(NORMAL)                                        
+              PERFORM 210-KEY-CHK-PARA                                   
+             WHEN DFHRESP(MAPFAIL)                                       
+              MOVE LOW-VALUES TO EDITMAPO                                
+              MOVE 'EMPLOYEE ID IS MANDATORY' TO MSGUO                   
+              MOVE DFHBMPRF TO MSGUA                                     
+              PERFORM 100-SEND-UPDATE-MAP                                
+              MOVE 6 TO WS-LENGTH                                        
+              PERFORM 110-RETURN-UPDATE-PROG                             
+             WHEN DFHRESP(LENGERR)                                       
+              MOVE 'INVALID LENGTH' TO MSGUO                             
+              PERFORM 500-RETURN-UPDATE-MAP                              
+            END-EVALUATE.                                                
+        210-KEY-CHK-PARA.                                                
+            EVALUATE EIBAID                                              
+             WHEN DFHENTER                                               
+              PERFORM 220-FETCH-PARA                                     
+             WHEN DFHPF6                                                 
+              PERFORM 230-UPDATE-PARA                                    
+             WHEN DFHPF2                                                 
+              PERFORM 300-RETURN-MENU-PARA   
+             WHEN DFHPF5                                                 
+              PERFORM 310-CLEAR-PARA                                     
+             WHEN DFHPF1                                                 
+              PERFORM 320-HELP-PARA                                      
+             WHEN OTHER                                                  
+              PERFORM 330-INVALID-FUN-PARA                               
+            END-EVALUATE.                                                
+        300-RETURN-MENU-PARA.                                            
+            EXEC CICS XCTL                                               
+                 PROGRAM('A11PGM4')                                      
+            END-EXEC.                                                    
+        310-CLEAR-PARA.                                                  
+            MOVE LOW-VALUES TO EDITMAPO.                                 
+            MOVE 'ENTER EMPLOYEE NUMBER TO UPDATE' TO MSGUO.             
+            INITIALIZE HV-EMP-REC                                        
+            MOVE DFHBMPRO TO ENAMEUA                                     
+            MOVE DFHBMPRO TO DESGUA                                      
+            MOVE DFHBMPRO TO EXTENUA                                     
+            MOVE DFHBMPRO TO MAILUA                                      
+            MOVE DFHBMPRO TO PROJUA                                      
+            MOVE DFHBMPRO TO PLIDUA                                      
+            MOVE DFHBMPRO TO DEPTCUA                                     
+            MOVE DFHBMPRO TO SLRUA                                       
+            MOVE DFHBMPRO TO OPTIONA                                     
+            PERFORM 100-SEND-UPDATE-MAP.      
+            MOVE 6 TO WS-LENGTH                                          
+            PERFORM 110-RETURN-UPDATE-PROG.                              
+        320-HELP-PARA.                                                   
+            MOVE LOW-VALUES TO EDITMAPO.                                 
+            MOVE 'HELP NOT AVAILABLE' TO MSGUO.                          
+            PERFORM 100-SEND-UPDATE-MAP.                                 
+            MOVE 6 TO WS-LENGTH                                          
+            PERFORM 110-RETURN-UPDATE-PROG.                              
+        330-INVALID-FUN-PARA.                                            
+            MOVE LOW-VALUES TO EDITMAPO.                                 
+            MOVE 'INVALID FUNCTION PRESSED' TO MSGUO.                    
+            PERFORM 100-SEND-UPDATE-MAP.                                 
+            MOVE 6 TO WS-LENGTH                                          
+            PERFORM 110-RETURN-UPDATE-PROG.                              
+        220-FETCH-PARA.                                                  
+            INITIALIZE HV-EMP-REC                                        
+            MOVE SPACES TO WS-MSG.                                       
+            MOVE '-' TO WS-MSG(1:1).                                     
+            IF EMPIDUL > 0 AND EMPIDUI IS NUMERIC                        
+             MOVE EMPIDUI TO HV-EMPID                                    
+             EXEC SQL                                                    
+               SELECT EMPID,EMPNAME,DESG,DEPTNO,PROJ,PLID,EXTN,          
+               MAILID,SALARY                                             
+               INTO :HV-EMPID, :HV-EMPNAME, :HV-DESG, :HV-DEPTNO,        
+               :HV-PROJ :IV-PROJ, :HV-PLID :IV-PLID, :HV-EXTN,  
+               :HV-MAILID, :HV-SALARY                                    
+               FROM EMPLOYEE_MASTER                                      
+               WHERE EMPID = :HV-EMPID                                   
+             END-EXEC                                                    
+             EVALUATE SQLCODE                                            
+              WHEN 000                                                   
+               STRING WS-MSG DELIMITED BY '-',                           
+               'DETAILS FETCHED -' DELIMITED BY SIZE                     
+               INTO WS-MSG                                               
+               MOVE HV-EMPID TO EMPIDUO                                  
+               MOVE HV-EMPNAME-TEXT TO ENAMEUO                           
+               MOVE HV-DESG-TEXT TO DESGUO                               
+               MOVE HV-DEPTNO TO DEPTCUO                                 
+               IF IV-PROJ = 0                                            
+                MOVE HV-PROJ-TEXT TO PROJUO                              
+               ELSE                                                      
+                MOVE 'NA' TO PROJUO                                      
+               END-IF                                                    
+               MOVE HV-PLID TO PLIDUO                                    
+               MOVE HV-EXTN TO EXTENUO                                   
+               MOVE HV-MAILID-TEXT TO MAILUO                             
+               MOVE HV-SALARY TO SLRUO                                   
+               MOVE DFHBMPRF TO EMPIDUA                                  
+               MOVE DFHBMPRF TO ENAMEUA                                  
+               MOVE DFHBMPRF TO EXTENUA                   
+               MOVE DFHBMPRF TO PLIDUA                                 
+               MOVE DFHBMFSE TO DESGUA                                 
+               MOVE DFHBMFSE TO MAILUA                                 
+               MOVE DFHBMFSE TO PROJUA                                 
+               MOVE DFHBMFSE TO DEPTCUA                                
+               MOVE DFHBMFSE TO SLRUA                                  
+               MOVE DFHBMFSE TO OPTIONA                                
+              WHEN 100                                                 
+               STRING WS-MSG DELIMITED BY '-',                         
+               'EMPID INVALID -' DELIMITED BY SIZE                     
+               INTO WS-MSG                                             
+              WHEN OTHER                                               
+               STRING WS-MSG DELIMITED BY '-',                         
+               'EMPID ERROR -' DELIMITED BY SIZE                       
+               INTO WS-MSG                                             
+             END-EVALUATE                                              
+            ELSE                                                       
+             STRING WS-MSG DELIMITED BY '-',                           
+             'EMPID IS MANDATORY AND NUMERIC ONLY -' DELIMITED BY SIZE 
+              INTO WS-MSG                                              
+            END-IF.                                                    
+            STRING WS-MSG DELIMITED BY '-',                            
+            ' ' DELIMITED BY SIZE                                      
+            INTO WS-MSG.                                               
+            MOVE WS-MSG TO MSGUO.                                        
+           PERFORM 100-SEND-UPDATE-MAP.                                 
+           MOVE 6 TO WS-LENGTH                                          
+           PERFORM 110-RETURN-UPDATE-PROG.                              
+       231-DESGINATION-VALIDATION.                                      
+           IF DESGUL > 0                                                
+            MOVE DESGUI TO HV-DESGVAL-TEXT                              
+            MOVE LENGTH OF HV-DESGVAL-TEXT TO HV-DESGVAL-LEN            
+            EXEC SQL                                                    
+              SELECT DESGVAL INTO :HV-DESGVAL                           
+              FROM DESIGNATION                                          
+              WHERE DESGVAL = :HV-DESGVAL                               
+            END-EXEC                                                    
+            EVALUATE  SQLCODE                                           
+            WHEN 000                                                    
+             MOVE DFHBMPRF TO DESGUA                                    
+             MOVE DESGUI TO HV-DESG-TEXT                                
+            WHEN 100                                                    
+             STRING WS-MSG DELIMITED BY '-',                            
+             'DESG NOT AVAILABLE-'                                      
+              DELIMITED BY SIZE INTO WS-MSG                             
+              COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1           
+            WHEN OTHER                                                  
+             STRING WS-MSG DELIMITED BY '-',                            
+             'DESG NOT AVAILABLE-'                                      
+              DELIMITED BY SIZE INTO WS-MSG      
+               COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1        
+             END-EVALUATE                                             
+            ELSE                                                      
+             MOVE DFHBMPRF TO DESGUA                                  
+             MOVE DESGUI TO HV-DESG-TEXT                              
+            END-IF.                                                   
+        232-MAILID-VALIDATION.                                        
+            IF MAILUL > 0                                             
+             INITIALIZE WS-MAIL-ID                                    
+             INITIALIZE WS-MAIL-CHAR                                  
+             INSPECT MAILUI TALLYING WS-MAIL-ID FOR ALL '@GMAIL.COM'  
+             INSPECT MAILUI TALLYING WS-MAIL-CHAR FOR CHARACTERS      
+              BEFORE '@GMAIL.COM'                                     
+             IF WS-MAIL-ID = 1 AND WS-MAIL-CHAR >= 1                  
+              MOVE DFHBMPRF TO MAILUA                                 
+              MOVE MAILUI TO HV-MAILID-TEXT                           
+             ELSE                                                     
+              STRING WS-MSG DELIMITED BY '-',                         
+              WS-MAIL-ID DELIMITED BY SIZE,                           
+              WS-MAIL-CHAR DELIMITED BY SIZE,                         
+             'MAIL INVALID -'                                         
+              DELIMITED BY SIZE INTO WS-MSG                           
+              COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1         
+             END-IF   
+            ELSE                                                         
+             MOVE DFHBMPRF TO MAILUA                                     
+             MOVE MAILUI TO HV-MAILID-TEXT                               
+            END-IF.                                                      
+        233-PROJECT-VALIDATION.                                          
+            INITIALIZE HV-PROJ                                           
+            IF PROJUL > 0                                                
+             IF DESGUI = 'TRNEE'                                         
+              MOVE DFHBMPRF TO PROJUA                                    
+              MOVE -1 TO IV-PROJ                                         
+             ELSE                                                        
+              MOVE PROJUI TO HV-PROJID-TEXT                              
+              MOVE PROJUL TO HV-PROJID-LEN                               
+              EXEC SQL                                                   
+                 SELECT PROJID INTO :HV-PROJID                           
+                 FROM PROJECT_MASTER                                     
+                 WHERE PROJID = :HV-PROJID                               
+              END-EXEC                                                   
+              EVALUATE SQLCODE                                           
+               WHEN 000                                                  
+                MOVE DFHBMPRF TO PROJUA                                  
+                MOVE PROJUI TO HV-PROJ-TEXT                              
+                MOVE 0 TO IV-PROJ                                        
+               WHEN 100                                                  
+                STRING WS-MSG DELIMITED BY '-',                          
+                 'PROJ NOT VALID-' DELIMITED BY SIZE     
+                 INTO WS-MSG                                             
+                 COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1         
+               WHEN OTHER                                                
+                STRING WS-MSG DELIMITED BY '-',                          
+                 'PROJ NOT VALIDO-' DELIMITED BY SIZE                    
+                 INTO WS-MSG                                             
+                 COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1         
+              END-EVALUATE                                               
+             END-IF                                                      
+            ELSE                                                         
+             MOVE DFHBMPRF TO PROJUA                                     
+             MOVE PROJUI TO HV-PROJ-TEXT                                 
+            END-IF.                                                      
+        234-DEPTARTMENT-VALIDATION.                                      
+            IF DEPTCUL > 0                                               
+             MOVE DEPTCUI TO HV-DEPTCODE                                 
+             EXEC SQL                                                    
+                SELECT DEPTCODE INTO :HV-DEPTCODE                        
+                FROM DEPARTMENT_MASTER                                   
+                WHERE DEPTCODE = :HV-DEPTCODE                            
+             END-EXEC                                                    
+             EVALUATE  SQLCODE                                           
+              WHEN 000                                                   
+               MOVE DFHBMPRF TO DEPTCUA                                  
+               MOVE DEPTCUI TO HV-DEPTNO      
+             WHEN 100                                                   
+              STRING WS-MSG DELIMITED BY '-',                           
+              'DEPT NOT VALID-' DELIMITED BY SIZE                       
+               INTO WS-MSG                                              
+               COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1          
+             WHEN OTHER                                                 
+              STRING WS-MSG DELIMITED BY '-',                           
+              'DEPT NOT VALID-' DELIMITED BY SIZE                       
+               INTO WS-MSG                                              
+               COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1          
+            END-EVALUATE                                                
+           ELSE                                                         
+            MOVE DFHBMPRF TO DEPTCUA                                    
+            MOVE DEPTCUI TO HV-DEPTNO                                   
+           END-IF.                                                      
+       235-SALARY-VALIDATION.                                           
+           IF SLRUL > 0                                                 
+            IF SLRUI IS NUMERIC AND SLRUI <= 999999 AND SLRUI >= 10000  
+             MOVE DFHBMPRF TO SLRUA                                     
+             MOVE SLRUI TO HV-SALARY                                    
+            ELSE                                                        
+             STRING WS-MSG DELIMITED BY '-',                            
+             'SAL INVALID-' DELIMITED BY SIZE                           
+             INTO WS-MSG                                                
+             COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1  
+             END-IF                                                      
+            ELSE                                                         
+             MOVE DFHBMPRF TO SLRUA                                      
+             MOVE SLRUI TO HV-SALARY                                     
+            END-IF.                                                      
+        236-GENERATE-EXTENSION.                                          
+            IF HV-EXTN > 0                                               
+             STRING WS-MSG DELIMITED BY '-',                             
+             'EXTN ALREADY EXIST -' DELIMITED BY SIZE                    
+              INTO WS-MSG                                                
+              MOVE EXTENUI TO HV-EXTN                                    
+              MOVE HV-EXTN TO EXTENUO                                    
+            ELSE IF DESGUI = 'TRNEE'                                     
+             MOVE 0000000 TO HV-EXTN                                     
+             MOVE 0000000 TO EXTENUO                                     
+            ELSE                                                         
+             EXEC SQL                                                    
+              SELECT MAX(EXTNNUM) INTO :HV-EXTNNUM                       
+              FROM EXTENSION                                             
+             END-EXEC                                                    
+             EVALUATE SQLCODE                                            
+              WHEN 000                                                   
+               EXEC SQL                                                  
+                UPDATE EXTENSION SET EXTNNUM = :HV-EXTNNUM + 1           
+                WHERE EXTNNUM = :HV-EXTNNUM        
+               END-EXEC                                              
+               EVALUATE SQLCODE                                      
+                WHEN 000                                             
+                 COMPUTE HV-EXTNNUM = HV-EXTNNUM + 1                 
+                 MOVE HV-EXTNNUM TO HV-EXTN                          
+                 MOVE HV-EXTN TO EXTENUO                             
+                WHEN 100                                             
+                 STRING WS-MSG DELIMITED BY '-',                     
+                 'EXT UPF-' DELIMITED BY SIZE                        
+                  INTO WS-MSG                                        
+                WHEN OTHER                                           
+                 STRING WS-MSG DELIMITED BY '-',                     
+                 'EXT UPF-' DELIMITED BY SIZE                        
+                  INTO WS-MSG                                        
+               END-EVALUATE                                          
+              WHEN 100                                               
+               STRING WS-MSG DELIMITED BY '-',                       
+               'EXT NOT FOUND -' DELIMITED BY SIZE                   
+                INTO WS-MSG                                          
+              WHEN OTHER                                             
+               STRING WS-MSG DELIMITED BY '-',                       
+               'EXT ERROR -' DELIMITED BY SIZE                       
+                INTO WS-MSG                                          
+             END-EVALUATE                                            
+             END-IF    
+            END-IF.                                                      
+        237-GENERATE-PLID.                                               
+            INITIALIZE HV-PLID                                           
+            MOVE PROJUI TO HV-PROJNAME-TEXT                              
+            MOVE LENGTH OF HV-PROJNAME-TEXT TO HV-PROJNAME-LEN           
+            EXEC SQL                                                     
+             SELECT PROJNAME,PLIDVAL INTO :HV-PROJNAME,:HV-PLIDVAL       
+             FROM LEADER                                                 
+             WHERE PROJNAME = :HV-PROJNAME                               
+            END-EXEC                                                     
+            EVALUATE SQLCODE                                             
+             WHEN 000                                                    
+              IF HV-PLIDVAL = EMPIDUI                                    
+               MOVE -1 TO IV-PLID                                        
+               MOVE HV-PLID TO PLIDUO                                    
+              ELSE IF DESGUI = 'PL'                                      
+               STRING WS-MSG DELIMITED BY '-',                           
+               'NOT AUTHORIZED PLID-' DELIMITED BY SIZE                  
+               INTO WS-MSG                                               
+               COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1           
+              ELSE IF DESGUI = 'SE'                                      
+               MOVE HV-PLIDVAL TO HV-PLID                                
+               MOVE HV-PLIDVAL TO PLIDUO                                 
+               MOVE 0 TO IV-PLID                                         
+              ELSE              
+               MOVE -1 TO IV-PLID                                        
+               MOVE HV-PLID TO PLIDUO                                    
+              END-IF                                                     
+              END-IF                                                     
+              END-IF                                                     
+             WHEN 100                                                    
+              IF DESGUI = 'PL'                                           
+               MOVE EMPIDUI TO HV-PLIDVAL                                
+                 EXEC SQL                                                
+                    INSERT INTO LEADER                                   
+                    (PROJNAME,PLIDVAL)                                   
+                    VALUES                                               
+                    (:HV-PROJNAME,:HV-PLIDVAL)                           
+                 END-EXEC                                                
+                 EVALUATE SQLCODE                                        
+                  WHEN 000                                               
+                   MOVE -1 TO IV-PLID                                    
+                   MOVE HV-PLID TO PLIDUO                                
+                  WHEN OTHER                                             
+                   COMPUTE WS-INVALID-COUNT = WS-INVALID-COUNT + 1       
+                 END-EVALUATE                                            
+              END-IF                                                     
+            END-EVALUATE.                                                
+        240-UPDATE-EMPLOYEE-DETAILS.                                     
+            IF WS-INVALID-COUNT = 0   
+             MOVE EMPIDUI TO HV-EMPID                                    
+             MOVE LENGTH OF HV-DESG-TEXT TO HV-DESG-LEN                  
+             MOVE LENGTH OF HV-PROJ-TEXT TO HV-PROJ-LEN                  
+             MOVE LENGTH OF HV-MAILID-TEXT TO HV-MAILID-LEN              
+             EXEC SQL                                                    
+              UPDATE EMPLOYEE_MASTER SET DESG = :HV-DESG,                
+              DEPTNO = :HV-DEPTNO, PROJ = :HV-PROJ :IV-PROJ,             
+              PLID = :HV-PLID :IV-PLID,                                  
+              EXTN = :HV-EXTN, MAILID = :HV-MAILID, SALARY = :HV-SALARY  
+              WHERE EMPID = :HV-EMPID                                    
+             END-EXEC                                                    
+             EVALUATE SQLCODE                                            
+              WHEN 000                                                   
+               STRING WS-MSG DELIMITED BY '-',                           
+               'EMPLOYEE UPDATE SUCCESS -' DELIMITED BY SIZE             
+               INTO WS-MSG                                               
+              WHEN 100                                                   
+               MOVE SQLCODE TO WS-SQLCODE                                
+               STRING WS-MSG DELIMITED BY '-',                           
+               'EMPLOYEE UPDATE UNSUCCES -' DELIMITED BY SIZE            
+               INTO WS-MSG                                               
+              WHEN OTHER                                                 
+               MOVE SQLCODE TO WS-SQLCODE                                
+               STRING WS-MSG DELIMITED BY '-',                           
+               'EMPLOYEE UPDATE UNSUCCES -' DELIMITED BY SIZE 
+               INTO WS-MSG                                               
+             END-EVALUATE                                                
+            END-IF.                                                      
+        230-UPDATE-PARA.                                                 
+            MOVE SPACES TO WS-MSG.                                       
+            MOVE '-' TO WS-MSG(1:1).                                     
+            MOVE 0 TO WS-INVALID-COUNT.                                  
+            IF OPTIONL > 0                                               
+             EVALUATE OPTIONI                                            
+              WHEN 'Y'                                                   
+               PERFORM 231-DESGINATION-VALIDATION                        
+               PERFORM 232-MAILID-VALIDATION                             
+               PERFORM 233-PROJECT-VALIDATION                            
+               PERFORM 234-DEPTARTMENT-VALIDATION                        
+               PERFORM 235-SALARY-VALIDATION                             
+               IF WS-INVALID-COUNT = 0                                   
+                MOVE 0 TO WS-INVALID-COUNT                               
+                PERFORM 236-GENERATE-EXTENSION                           
+                PERFORM 237-GENERATE-PLID                                
+               END-IF                                                    
+              WHEN 'N'                                                   
+               PERFORM 231-DESGINATION-VALIDATION                        
+               PERFORM 232-MAILID-VALIDATION                             
+               PERFORM 233-PROJECT-VALIDATION                            
+               PERFORM 234-DEPTARTMENT-VALIDATION    
+               PERFORM 235-SALARY-VALIDATION                             
+               IF WS-INVALID-COUNT = 0                                   
+                MOVE 0 TO WS-INVALID-COUNT                               
+                PERFORM 237-GENERATE-PLID                                
+               END-IF                                                    
+             END-EVALUATE                                                
+             IF WS-INVALID-COUNT = 0                                     
+              PERFORM 240-UPDATE-EMPLOYEE-DETAILS                        
+             END-IF                                                      
+            ELSE                                                         
+             STRING WS-MSG DELIMITED BY '-',                             
+             'OPTION IS MANDATORY -' DELIMITED BY SIZE                   
+              INTO WS-MSG                                                
+            END-IF.                                                      
+            MOVE WS-MSG TO MSGUO.                                        
+            MOVE DFHBMPRF TO EMPIDUA.                                    
+            MOVE DFHBMPRF TO ENAMEUA.                                    
+            MOVE DFHBMPRF TO EXTENUA.                                    
+            MOVE DFHBMPRF TO PLIDUA.                                     
+            PERFORM 100-SEND-UPDATE-MAP.                                 
+            MOVE 6 TO WS-LENGTH.                                         
+            PERFORM 110-RETURN-UPDATE-PROG.     
